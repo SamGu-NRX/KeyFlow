@@ -1,0 +1,245 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KeyFlow local editor — build spec</title>
+    <meta property="article:author" content="Obvious (autobuild)" />
+    <meta property="article:published_time" content="2026-10-10" />
+  </head>
+  <body>
+    <main data-bp-node-id="doc-body"><header>
+  <bp-eyebrow>KeyFlow · build spec · SamGu-NRX/KeyFlow · branch obv/products-l4-keyflow-local-editor-20261010</bp-eyebrow>
+  <h1>Ship the local writing editor KeyFlow advertises</h1>
+  <bp-subheader>The committed app is a marketing lander and the Tauri <code>greet</code> demo. This spec turns it into a working local-first writing product — document library, autosaving editor with revisions, safe import/export, deterministic local suggestions, settings with a local-data control, and marketing that tells the truth — delivered as milestone commits on one draft PR.</bp-subheader>
+</header>
+<bp-toc label="Contents"></bp-toc>
+<section id="problem" data-bp-node-id="problem"><bp-subheader>KeyFlow advertises an AI writing tool. The repo delivers a joke-heavy lander whose every button is inert, plus the Tauri template <code>greet</code> command. This build makes the product real — scoped deliberately to a <strong>user-opened, local-first writing editor</strong>.</bp-subheader>
+<p><strong>The product this spec ships:</strong> a document library, an editor with autosave acknowledgements, bounded revision history and undo, import/export with explicit safety rules, one deterministic local suggestion adapter behind an explicit confirm-to-apply flow, user-triggered formatting, and settings that include a clear-local-data control. The browser flow <em>is</em> the product and must actually run. The Tauri desktop shell gets a correct config and unit-tested platform-independent logic, but packaging a desktop window is an unrun arm on this Linux sandbox and will be recorded as such — never as a passed build.</p>
+<bp-callout type="invariant" label="Scope boundary">KeyFlow is a destination the user opens to write. No ambient application capture, no keystroke injection, no global hooks, no “works in every app” integration, no cloud AI, no network calls from product code, no personal writing corpus. Those belong to a different product; this spec deliberately does not compete with Caret’s system-wide capture.</bp-callout>
+<p><strong>Load-bearing assumption.</strong> The task’s premise is that a local editor (browser now, desktop shell later) is the useful product KeyFlow should be. That premise would be wrong if the operator actually needs system-wide capture or cloud sync — both are explicit non-goals here, and the marketing rewrite will say so. Confirming evidence: the shipped editor passes the full local test/QA bar with zero network calls. Breaking evidence: a hard requirement for cross-device sync or ambient capture, which would need a different spec.</p>
+<p><strong>What approval starts:</strong> one draft PR from <code>obv/products-l4-keyflow-local-editor-20261010</code> into <code>main</code>, built as two to four pushed milestones — (1) baseline unblock plus a tested document model, (2) working library/editor with recovery, (3) formatting, suggestions, and truthful marketing, (4) settings, Rust core, and the full QA sweep. All data stays on-device; nothing alters text before an explicit confirmation; every claim on the lander maps to shipped code or is labelled proposed.</p>
+</section>
+<section id="current-state" data-bp-node-id="current-state"><bp-subheader>Read from a fresh clone of <code>main @ c4ddddcb</code> on 2026-10-10 (full log: research findings, 12 numbered blockers). The eight that shape this design:</bp-subheader>
+<bp-table density="compact" wide="">
+  <table>
+    <thead><tr><th>Blocker</th><th>Evidence (read this session)</th><th>Design consequence</th></tr></thead>
+    <tbody>
+      <tr><td>Every Next CLI command fails at config load</td><td><code>next.config.mjs</code> line 4 imports <code>@svgr/webpack</code>, declared nowhere in <code>package.json</code>; <code>pnpm run build</code> and <code>pnpm run lint</code> die with <code>ERR_MODULE_NOT_FOUND</code> (verified run)</td><td>Milestone 1 unblocks tooling before any product code</td></tr>
+      <tr><td>Quality gates disabled</td><td><code>next.config.mjs</code> sets <code>eslint.ignoreDuringBuilds: true</code> and <code>typescript.ignoreBuildErrors: true</code>; <code>eslint</code> not even installed</td><td>Re-enable both gates; add <code>eslint</code> + <code>eslint-config-next</code></td></tr>
+      <tr><td>Zero test scaffolding</td><td>No vitest/jest/playwright configs, no test files, no <code>.github/</code>, no test script (verified by tree enumeration)</td><td>Vitest + Playwright + axe introduced from zero; exact fixtures committed</td></tr>
+      <tr><td>Tauri config mismatched</td><td><code>tauri.conf.json</code>: <code>devUrl</code> 1420 vs Next dev on 3000; <code>frontendDist ../dist</code> vs Next’s actual output; <code>security.csp: null</code>; <code>Cargo.lock</code> untracked</td><td>Fix to 3000 + <code>../out</code> under <code>output: 'export'</code>; explicit CSP; track <code>Cargo.lock</code></td></tr>
+      <tr><td>No product logic beyond <code>greet</code></td><td><code>src-tauri/src/lib.rs</code> lines 3–4 is the only command; grep for <code>localStorage|indexedDB|invoke</code> in <code>src/</code> = zero matches; <code>@tauri-apps/api</code> never imported</td><td>Storage boundary designed fresh, browser-first with a Tauri adapter</td></tr>
+      <tr><td>Marketing overstates reality</td><td>Verbatim lander/README claims: “GitHub Copilot-style completions in every app”, “Uses RAG to learn your writing style”, “Join thousands of early adopters”, “We tested it on a laptop from 2015”, pricing tiers selling “Unlimited RAG Training” / “Sync Across 3 Devices”; README says Next.js 15 while <code>package.json</code> pins 14.2.24</td><td>Lander + README rewritten to map every claim to shipped code or label it proposed</td></tr>
+      <tr><td>Tailwind v3/v4 drift</td><td>Tailwind 4.0.9 in v4 mode; inert v3-style <code>tailwind.config.ts</code> (no <code>@config</code>); two overlapping token sets in <code>globals.css</code>; <code>@plugin "tailwindcss-animate"</code> with the package absent</td><td>One token source (keep the winning oklch set), drop the inert config and plugin line</td></tr>
+      <tr><td>Stale references</td><td><code>tsconfig.json</code> includes nonexistent <code>src/components/page.jsx</code>; metadata is “Create Next App”; <code>public/</code> holds template svgs; <code>.env</code> examples reference Supabase/Clerk/Stream with no matching code</td><td>Cleanup in M1 (tsconfig, metadata) and M3 (assets, env examples)</td></tr>
+    </tbody>
+  </table>
+</bp-table>
+<h3>What works today and shaped the design</h3>
+<p><code>pnpm install --frozen-lockfile</code> passes (17.2s) and <code>pnpm exec tsc --noEmit</code> passes (5.5s) on the pristine tree — the toolchain is sound once the config-load blocker is gone. Stack stays as pinned: Next 14.2.24, React 18.3.1, TS 5.6 strict, Tailwind v4, framer-motion, react-icons, pnpm-lock v9.0. <strong>No design system exists</strong> (<code>src/lib/</code>, <code>src/components/ui/</code>, <code>src/hooks/</code> all absent; <code>components.json</code> aliases point at nothing) — so the UI assembles from minimal presentational components on the existing Tailwind v4 tokens plus framer-motion, not a shadcn install. No upgrade of Next/React is in scope. Sandbox reality: node 24, pnpm 10, git 2.47 present; rustc/cargo/rustup and webkit2gtk/gtk3/libsoup system libs all absent; apt-get with passwordless sudo available if a toolchain install is attempted.</p>
+</section>
+<section id="what-we-build" data-bp-node-id="what-we-build"><bp-subheader>Four layers, each independently tested: a pure document model, one storage boundary with three adapters, three screens, and a Rust command core. Product code makes zero network calls.</bp-subheader>
+
+<h3>Document model and contracts</h3>
+<p>One TypeScript module is the single source of truth for document shape. Every entry point that receives unknown bytes — a fresh IndexedDB read, an import file, a desktop payload — funnels through the same validator. Revisions are full-text snapshots, bounded, newest-first: predictable storage and reliable restore, and diffs are not worth the complexity for local writing docs.</p>
+<bp-source language="typescript" summary="src/lib/keyflow/model.ts — schema, validator entry point, bounds" open="">
+// The single source of truth for document shape. Everything unknown flows
+// through parseStoredDocument — fresh storage reads, imports, desktop payloads.
+export const SCHEMA_VERSION = 1;
+export const MAX_REVISIONS = 50;
+
+export interface Revision {
+  id: string;            // `${doc.revCounter}` — stable across storage roundtrips
+  text: string;          // full snapshot (bounded count keeps storage predictable)
+  createdAt: string;     // ISO 8601 UTC
+  origin: "autosave" | "manual" | "import" | "restore" | "format" | "suggestion";
+}
+
+export interface KeyflowDocument {
+  schemaVersion: 1;
+  id: string;            // uuid v4, generated at creation
+  title: string;         // trimmed; empty becomes "Untitled document"
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+  revCounter: number;    // monotonic — never reused, even after revision trimming
+  revisions: Revision[]; // newest-first, length ≤ MAX_REVISIONS
+}
+
+// Validates unknown input; never trusts shape. Corrupt records are quarantined
+// (surfaced in Settings), never thrown away silently, never crashed on.
+export function parseStoredDocument(input: unknown): Result<keyflowdocument, parseerror="">;
+</keyflowdocument,></bp-source>
+
+<h3>Persistence: one adapter interface, three implementations</h3>
+<p>The storage boundary is one interface. The browser adapter is the product path and is exercised for real; the desktop adapter mirrors it over Tauri commands; the fake makes failure deterministic in tests.</p>
+<bp-source language="typescript" summary="src/lib/keyflow/storage.ts — the boundary the Rust commands mirror 1:1" open="">
+export interface StorageAdapter {
+  listDocuments(): Promise<keyflowdocument[]>;
+  getDocument(id: string): Promise<keyflowdocument |="" null="">;
+  putDocument(doc: KeyflowDocument): Promise&lt;{ savedAt: string }&gt;;  // ← the autosave ack
+  deleteDocument(id: string): Promise&lt;void&gt;;
+  getMeta&lt;T&gt;(key: MetaKey): Promise&lt;T | null&gt;;
+  setMeta&lt;T&gt;(key: MetaKey, value: T): Promise&lt;void&gt;;
+  clearAll(): Promise&lt;void&gt;;          // Settings → “Clear local data”
+}
+</keyflowdocument></keyflowdocument[]></bp-source>
+<ul>
+  <li><strong><code>BrowserStorageAdapter</code></strong> — IndexedDB database <code>keyflow</code> v1: object stores <code>documents</code> (keyPath <code>id</code>) and <code>meta</code> (settings, autosave buffers, quarantine). Every read passes <code>parseStoredDocument</code>; corrupt or unknown-version records go to the <code>quarantine</code> meta list and surface in Settings — they never crash the library or vanish silently.</li>
+  <li><strong><code>DesktopStorageAdapter</code></strong> — same methods via <code>invoke()</code> to the Rust commands below; selected only when running inside the Tauri shell.</li>
+  <li><strong><code>FakeDesktopStorageAdapter</code></strong> — a scriptable queue of results and failures (e.g. “next <code>putDocument</code> rejects with <code>disk_full</code>”), giving deterministic ack-error and recovery tests without a desktop host.</li>
+  <li><strong>Autosave buffer</strong> — meta key <code>autosave:{docId}</code> holds <code>{ title, text, savedAt }</code>, written on every debounce tick before the primary write. If the primary write fails or the app dies mid-save, the buffer is the recovery source.</li>
+</ul>
+
+<h3>Screens</h3>
+<p>Three routes, all client components on the existing Tailwind v4 tokens, framer-motion (with <code>prefers-reduced-motion</code> honored everywhere), react-icons:</p>
+<ul>
+  <li><strong><code>/</code> — lander, rewritten truthfully.</strong> Keeps the irreverent voice; drops every false claim. Hero CTA → <code>/library</code>. Metadata fixed from “Create Next App”.</li>
+  <li><strong><code>/library</code> — the app: master-detail.</strong> Left rail: document list (title, updated time, word count; actions: rename, delete with confirm, export). Main pane: the editor for the selected document. Below 768px the two panes swap (list ↔ editor) within the same route — no dynamic segments, so <code>output: 'export'</code> stays viable.</li>
+  <li><strong>Editor.</strong> Title input; plain-textarea surface; formatting toolbar (user-triggered only); ack chip — <em>Saving…</em> / <em>Saved 14:32:08</em> / <em>Save failed — retry</em>; undo/redo (buttons + Ctrl/Cmd+Z, +Shift for redo, bounded stack of 100); revisions drawer (bounded list, preview, restore — restore creates a new <code>'restore'</code> revision so it is itself undoable and never silently discards newer text); import picker and export menu (<code>.md</code>, <code>.txt</code>, <code>.keyflow.json</code>); “Check with Local Clarity” button.</li>
+  <li><strong><code>/settings</code>.</strong> Autosave cadence (instant / 2s / 10s), storage usage, quarantine viewer (inspect or purge corrupt records), and <strong>Clear all local data</strong> — type-to-confirm, wipes every store and buffer; on desktop it wires to the Rust clear command.</li>
+</ul>
+
+<h3>User-triggered formatting</h3>
+<bp-source language="typescript" summary="src/lib/keyflow/formatting.ts — pure selection transforms, no autoformat anywhere" open="">
+export type FormatKind = "bold" | "italic" | "heading" | "bulleted" | "code" | "link";
+
+// Markdown-syntax insertion on the selection. Idempotent: applying a format that
+// is already present unwraps it. Pure — (text, selection) → (text, selection).
+export function applyFormat(
+  text: string,
+  sel: { start: number; end: number },
+  kind: FormatKind,
+): { text: string; start: number; end: number };
+</bp-source>
+<p>Toolbar buttons and Ctrl/Cmd+B / Ctrl/Cmd+I shortcuts call the same pure function. No formatting happens while typing — nothing transforms text the user did not explicitly request.</p>
+
+<h3>Suggestions: adapter, deterministic local example, confirm-to-apply</h3>
+<bp-source language="typescript" summary="src/lib/keyflow/suggestions.ts — the only analysis surface; zero network" open="">
+export interface SuggestionAdapter {
+  id: string;            // "local-clarity" ships; the interface is the extension point
+  label: string;
+  analyze(input: { title: string; text: string }): Suggestion[];
+}
+
+export interface Suggestion {
+  id: string;            // stable: `${ruleId}:${occurrenceIndex}`
+  ruleId: string;        // "double-space", "weasel-word", "long-sentence", "passive-marker"
+  message: string;       // human explanation, names the rule
+  range: { start: number; end: number };
+  replacement: string;   // "" for a deletion
+}
+</bp-source>
+<p><strong><code>LocalClarityAdapter</code></strong> is the deterministic local example: fixed rule list — repeated spaces, weasel words from a fixed list, sentences over 40 words, passive “was …ed by” markers. Same input, same output, forever; no model, no request. It runs only when the user clicks <em>Check with Local Clarity</em>. Results open a review tray: each suggestion previews a before/after diff of its exact range; <em>Accept</em> applies exactly that replacement through the reducer (creating a <code>'suggestion'</code> revision, undoable); <em>Reject</em> removes it. <strong>Text is never touched before an explicit accept</strong> — tests assert byte-identical text after <code>analyze</code>.</p>
+
+<h3>Rust command boundary (desktop arm)</h3>
+<bp-source language="rust" summary="src-tauri/src/keyflow_core.rs + commands.rs — logic separated from the Tauri shell" open="">
+// keyflow_core.rs — platform-independent, no tauri types; the cargo test target.
+pub struct StoredDocument { /* serde mirror of KeyflowDocument, serde(default) for forward reads */ }
+
+pub fn validate_document(raw: &amp;str) -&gt; Result&lt;StoredDocument, CoreError&gt; { /* same rules as TS validator */ }
+pub fn bound_revisions(doc: &amp;mut StoredDocument, max: usize) { /* newest-first trim, counter untouched */ }
+
+// commands.rs — thin wrappers holding no logic; JSON files under app_data()/keyflow/.
+#[tauri::command]
+fn desktop_put_document(state: State&lt;StoreHandle&gt;, doc: StoredDocument) -&gt; Result&lt;String, String&gt; {
+    // writes atomically (tmp + rename), returns savedAt — the ack the TS side awaits
+}
+</bp-source>
+<p><code>tauri.conf.json</code> is fixed: <code>devUrl</code> → <code>http://localhost:3000</code>, <code>frontendDist</code> → <code>../out</code> with <code>output: 'export'</code> verified by an actual <code>next build</code>, explicit CSP replacing <code>null</code>, and <code>Cargo.lock</code> tracked. <code>cargo test --manifest-path src-tauri/Cargo.toml</code> runs where the toolchain permits (see Verification for the honest fallback — this sandbox has no Rust toolchain or webkit deps today).</p>
+
+<h3>Marketing and README truth</h3>
+<p>The lander keeps its voice; every capability claim maps to shipped code. <strong>Works (say so):</strong> local library, autosave with acknowledgements, revision history with restore, undo/redo, import/export (.md/.txt/.keyflow.json), Local Clarity suggestions with preview and accept/reject, user-triggered formatting, settings with clear-local-data. <strong>Proposed (label as such):</strong> packaged desktop app; nothing else is promised. <strong>Cut entirely:</strong> Copilot/RAG/every-app claims, the $9/$19/$49 tiers promising “Unlimited RAG Training” and “Sync Across 3 Devices” (replaced by free &amp; open-source positioning — a local tool cannot honestly sell sync it does not have), “Join thousands of early adopters”, “We tested it on a laptop from 2015”. README: Next 14 (fixing the “Next.js 15” claim), real setup, architecture map, test commands, screenshots, and an explicit unrun-arms section.</p>
+</section>
+<section id="flows" data-bp-node-id="flows"><bp-subheader>The states where data loss could hide: autosave/ack/recovery, import conflicts, and suggestion review. Each is a tested state machine, not a hope.</bp-subheader>
+
+<h3>Autosave, acknowledgement, and crash recovery</h3>
+<figure>
+<svg role="img" viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" aria-labelledby="flow-title flow-desc">
+  <title id="flow-title">Autosave and recovery state machine</title>
+  <desc id="flow-desc">Editing transitions to Saving on the debounce tick; Saving reaches Saved on adapter acknowledgement or SaveFailed on adapter error; a stale recovery buffer on reopen enters RecoveryPending, which resolves by restoring (creating a restore revision) or discarding the buffer.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" style="fill: var(--bp-blue-700);"></path>
+    </marker>
+  </defs>
+  <g style="font-size: 13px; fill: var(--bp-blue-900);">
+    <!-- nodes -->
+    <rect x="20" y="120" width="120" height="46" rx="8" style="fill: var(--bp-blue-50); stroke: var(--bp-blue-700); stroke-width: 1.5;"></rect>
+    <text x="80" y="148" text-anchor="middle">Editing</text>
+    <rect x="210" y="120" width="110" height="46" rx="8" style="fill: var(--bp-blue-50); stroke: var(--bp-blue-700); stroke-width: 1.5;"></rect>
+    <text x="265" y="148" text-anchor="middle">Saving</text>
+    <rect x="400" y="40" width="110" height="46" rx="8" style="fill: var(--bp-blue-50); stroke: var(--bp-blue-700); stroke-width: 1.5;"></rect>
+    <text x="455" y="68" text-anchor="middle">Saved</text>
+    <rect x="400" y="200" width="120" height="46" rx="8" style="fill: var(--bp-blue-50); stroke: var(--bp-blue-700); stroke-width: 1.5;"></rect>
+    <text x="460" y="228" text-anchor="middle">Save failed</text>
+    <rect x="610" y="120" width="150" height="46" rx="8" style="fill: var(--bp-blue-50); stroke: var(--bp-blue-700); stroke-width: 1.5;"></rect>
+    <text x="685" y="142" text-anchor="middle">Recovery pending</text>
+    <text x="685" y="158" text-anchor="middle" style="font-size: 11px;">(buffer newer than ack)</text>
+    <!-- edges -->
+    <path d="M 140 143 H 204" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="172" y="112" text-anchor="middle" style="font-size: 11px;">debounce tick</text>
+    <text x="172" y="168" text-anchor="middle" style="font-size: 11px;">buffer written first</text>
+    <path d="M 320 120 Q 360 80 396 68" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="352" y="98" text-anchor="middle" style="font-size: 11px;">putDocument ack</text>
+    <path d="M 320 166 Q 360 206 396 220" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="352" y="205" text-anchor="middle" style="font-size: 11px;">adapter error</text>
+    <path d="M 455 86 Q 430 110 320 136" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="404" y="116" text-anchor="middle" style="font-size: 11px;">edit / retry</text>
+    <path d="M 460 200 Q 560 180 614 158" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="552" y="180" text-anchor="middle" style="font-size: 11px;">app dies / reload</text>
+    <path d="M 760 143 H 812 Q 826 143 812 143" style="stroke: none; fill: none;"></path>
+    <path d="M 685 166 Q 685 260 340 252 Q 200 246 150 168" style="stroke: var(--bp-blue-700); stroke-width: 1.5; fill: none;" marker-end="url(#arrow)"></path>
+    <text x="420" y="278" text-anchor="middle" style="font-size: 11px;">Restore → creates a 'restore' revision (undoable) · Discard → buffer cleared, text stays as last acked</text>
+  </g>
+</svg>
+<figcaption>The buffer is written before the primary write, so any crash leaves the newest text recoverable; nothing overwrites the last acked document silently.</figcaption>
+</figure>
+<p>Reopen logic: if a recovery buffer exists whose <code>savedAt</code> is newer than the document’s last acked <code>updatedAt</code>, the library shows a recovery banner before anything else. Restore replays the buffer through <code>parseStoredDocument</code> and commits a <code>'restore'</code> revision; Discard clears the buffer and keeps the last acked text. Both choices are explicit; neither is silent.</p>
+
+<h3>Import decision path</h3>
+<ul>
+  <li><code>.txt</code> / <code>.md</code> → always a <em>new</em> document (title from first heading or filename), one <code>'import'</code> revision.</li>
+  <li><code>.keyflow.json</code> → <code>parseStoredDocument</code>; invalid or unknown-version → explicit rejection with the reason; library byte-unchanged (asserted before/after in tests).</li>
+  <li>Valid, new <code>id</code> → imported directly.</li>
+  <li>Valid, existing <code>id</code> → conflict dialog — <em>Keep newer</em> (default) / <em>Overwrite</em> / <em>Import as copy</em>. An older import can never overwrite a newer local document silently, and neither can a newer one.</li>
+  <li>Safety invariant: imported content is plain text everywhere. No HTML rendering, no <code>dangerouslySetInnerHTML</code> anywhere in the codebase — embedded markup or scripts in an import are inert characters, and a test proves it.</li>
+</ul>
+
+<h3>Suggestion review path</h3>
+<p>Click <em>Check with Local Clarity</em> → tray lists suggestions with rule names → each row previews its exact before/after diff → <em>Accept</em> applies one replacement (one <code>'suggestion'</code> revision, one undo step), <em>Reject</em> drops it, <em>Discard all</em> closes the tray. Analyze never mutates the document; accept applies exactly <code>range → replacement</code> and nothing else.</p>
+</section>
+<section id="verification" data-bp-node-id="verification"><bp-subheader>Every deliverable has an observable outcome, a verification method, and a named failure mode. There is no CI in this repo — commands run per milestone and their captured output is the evidence.</bp-subheader>
+<bp-table density="compact" wide="">
+  <table>
+    <thead><tr><th>Deliverable</th><th>Acceptance criteria</th><th>How verified</th><th>Failure looks like</th></tr></thead>
+    <tbody>
+      <tr><td>Baseline tooling unblocked</td><td><code>pnpm install --frozen-lockfile</code>, <code>pnpm exec tsc --noEmit</code>, <code>pnpm run build</code> (gates re-enabled), <code>pnpm run lint</code> all exit 0</td><td>Commands run on the milestone commit; output quoted in the PR</td><td><code>ERR_MODULE_NOT_FOUND</code>, type errors, lint findings</td></tr>
+      <tr><td>Document model</td><td>Roundtrip preserves every field byte-for-byte; exact cases: valid v1 doc roundtrips; unknown <code>schemaVersion</code> rejected; corrupt record quarantined (not dropped, not crashing); revision overflow trims oldest with <code>revCounter</code> untouched; empty title → “Untitled document”</td><td>Vitest suite with committed fixtures</td><td>Any field drift, silent data discard, unhandled throw</td></tr>
+      <tr><td>Autosave / no-loss</td><td>Type → debounce → <code>putDocument</code> ack → chip shows <em>Saved</em> with time; kill the tab mid-typing (buffer written, no ack) → reopen shows recovery banner → restore returns text byte-identical</td><td>Playwright against real IndexedDB: navigate away and back mid-edit</td><td>Text loss on reload; missing ack; silent buffer discard</td></tr>
+      <tr><td>Import safety</td><td>Malformed JSON → explicit error, library unchanged (list asserted before/after); older same-id import → conflict dialog, no silent overwrite; script-laden import renders inert</td><td>Vitest + Playwright with committed malformed fixtures</td><td>Silent overwrite, crash, executed content</td></tr>
+      <tr><td>Deterministic desktop failures</td><td>Scripted <code>putDocument</code> rejection → chip <em>Save failed</em>, buffer retained, retry succeeds → <em>Saved</em></td><td>Vitest with <code>FakeDesktopStorageAdapter</code> script</td><td>Unhandled rejection; lost buffer</td></tr>
+      <tr><td>Suggestions</td><td><code>analyze</code> on a fixture returns the exact expected set (snapshot); text byte-identical before accept; accept applies exactly range→replacement; reject is a no-op</td><td>Vitest + Playwright</td><td>Text drift before confirmation; nondeterministic output</td></tr>
+      <tr><td>Formatting</td><td><code>applyFormat</code> table cases: empty selection, mid-word, already-formatted unwrap, multiline — all correct, all pure</td><td>Vitest</td><td>Wrong wrap, mutation of untouched regions</td></tr>
+      <tr><td>UI / QA bar</td><td>Playwright at 1440×900 and 390×844; keyboard-only pass (toolbar, library nav, dialogs trapped and escapable); <code>prefers-reduced-motion</code> disables typewriter/entrance motion; axe: zero serious/critical findings on both viewports; screenshots committed under <code>docs/evidence/</code></td><td><code>pnpm exec playwright test</code> + committed artifacts</td><td>Any serious/critical finding; motion under reduced-motion</td></tr>
+      <tr><td>Rust arm</td><td><code>cargo test --manifest-path src-tauri/Cargo.toml</code> green <em>if</em> the toolchain installs (rustup + gtk/webkit deps; passwordless sudo exists). Otherwise: recorded as an unrun arm with the exact failure output — never claimed as a passing desktop build</td><td>Command output in the PR; explicit unrun-arm note if blocked</td><td>A claimed desktop/cargo pass without output</td></tr>
+      <tr><td>Marketing truth</td><td>Every lander claim traces to a shipped feature or is labelled proposed; no network code in product paths (<code>fetch</code>/<code>XMLHttpRequest</code>/websocket grep over <code>src/</code> returns nothing outside tests)</td><td>Claim-by-claim table in the PR + grep output</td><td>An unbacked claim anywhere on the page</td></tr>
+    </tbody>
+  </table>
+</bp-table>
+<bp-note>Linux here cannot package or open a desktop window (no webkit/gtk system libs). That arm is reported as unrun with evidence; the browser flow is the product and must fully pass. If the Rust toolchain cannot be installed even for headless unit tests, the same honesty rule applies to <code>cargo test</code>.</bp-note>
+</section>
+<section id="locked" data-bp-node-id="locked"><bp-subheader>Inputs the execution plan consumes as settled. The operator can override any of these before approving the plan; after approval they are reopened only by a new instruction.</bp-subheader>
+<bp-callout type="locked" label="Product shape">Browser-first local product. IndexedDB behind one <code>StorageAdapter</code> interface; desktop is an adapter plus Rust commands, never the primary path. Reversal condition: the operator demands cloud sync or ambient capture — that is a different spec.</bp-callout>
+<bp-callout type="locked" label="Routes"><code>/library</code> is a single master-detail route (static-export compatible, no dynamic segments); <code>/</code> stays the marketing entry; <code>/settings</code> is separate. Mobile swaps panes, it does not fork routes.</bp-callout>
+<bp-callout type="locked" label="Data model">Revisions are full-text snapshots, newest-first, bounded at 50; <code>revCounter</code> is monotonic and never reused. Restore creates a new revision (non-destructive, undoable). Undo stack bounded at 100.</bp-callout>
+<bp-callout type="locked" label="Consent invariant">Formatting and suggestions are 100% user-triggered. No typing-time transformation, no ambient analysis, and no text change before an explicit accept. Suggestion apply is the only mutation path and it is one replacement wide.</bp-callout>
+<bp-callout type="locked" label="No-model boundary">One deterministic local suggestion adapter (<code>local-clarity</code>) ships. No live model request, no personal writing corpus, no telemetry, no network call from product code, no universal-integration claim in product or marketing.</bp-callout>
+<bp-callout type="locked" label="Marketing posture">Pricing tiers are removed and replaced with free &amp; open-source positioning; the irreverent voice stays where it makes no factual claim; every remaining claim maps to shipped code or is labelled proposed. README fixes the “Next.js 15” falsehood.</bp-callout>
+<bp-callout type="locked" label="Delivery">One draft PR: <code>obv/products-l4-keyflow-local-editor-20261010</code> → <code>main</code>, built from <code>main @ c4ddddcb</code> (verified fresh start — branch and PR do not exist). Two to four pushed milestones, each passing its tests before push. Author Sam Gu &lt;127461594+SamGu-NRX@users.noreply.github.com&gt; with the obvious-autobuild[bot] co-author trailer on every commit; author metadata verified on the remote before push. Never merge, never touch workflows/deploy/settings, PR body ends with the Handoff section and the mandated footer.</bp-callout>
+<bp-callout type="locked" label="Honest arms">Desktop packaging and (if the toolchain cannot be installed) <code>cargo test</code> are recorded as unrun with exact evidence. The browser flow must actually run and fully pass. No measurement is invented; no unexecuted path is labelled passed.</bp-callout>
+<bp-callout type="locked" label="Open questions">None. Every decision above is resolvable from the task brief and the read codebase.</bp-callout>
+</section>
+</main>
+  
+
+</body></html>
